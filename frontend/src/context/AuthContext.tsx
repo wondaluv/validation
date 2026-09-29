@@ -116,14 +116,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error(response.message || 'Registration failed')
       }
 
-      const { merchant: newMerchant, apiKey, secretKey } = response
+      const { apiKey, secretKey } = response.data
 
-      const mockToken = 'token_' + Math.random().toString(36).substring(2, 34)
-      localStorage.setItem('afripay_token', mockToken)
-      localStorage.setItem('afripay_merchant', JSON.stringify(newMerchant))
+      const loginResponse = await authApi.login(data.email, data.password)
+      if (!loginResponse.success) {
+        throw new Error(loginResponse.message || 'Login after registration failed')
+      }
 
-      setToken(mockToken)
-      setMerchant(newMerchant)
+      localStorage.setItem('afripay_token', loginResponse.token)
+      localStorage.setItem('afripay_merchant', JSON.stringify(loginResponse.merchant))
+
+      setToken(loginResponse.token)
+      setMerchant(loginResponse.merchant)
 
       return { apiKey, secretKey }
     } finally {
