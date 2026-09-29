@@ -33,7 +33,7 @@ const paymentMethods = [
 ]
 
 export default function Checkout() {
-  const { reference } = useParams()
+  const { reference: _reference } = useParams()
   const navigate = useNavigate()
   const [selectedMethod, setSelectedMethod] = useState<string | null>(null)
   const [selectedOption, setSelectedOption] = useState<string | null>(null)

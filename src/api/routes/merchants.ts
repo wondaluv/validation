@@ -60,6 +60,43 @@ export function createMerchantRoutes(
   });
 
   /**
+   * POST /merchants/authenticate
+   * Authenticate merchant (alias for login)
+   */
+  router.post('/authenticate', async (req: Request, res: Response) => {
+    try {
+      const { email, password } = req.body;
+
+      if (!email || !password) {
+        res.status(400).json({
+          success: false,
+          message: 'Email and password are required'
+        });
+        return;
+      }
+
+      const result = await merchantService.authenticate({ email, password });
+
+      if (!result.success) {
+        res.status(401).json(result);
+        return;
+      }
+
+      res.json({
+        success: true,
+        token: result.token,
+        merchant: result.merchant
+      });
+    } catch (error) {
+      logger.error('Authentication error', error as Error);
+      res.status(500).json({
+        success: false,
+        message: 'Internal server error'
+      });
+    }
+  });
+
+  /**
    * POST /merchants/login
    * Authenticate merchant
    */
@@ -120,6 +157,133 @@ export function createMerchantRoutes(
       });
     } catch (error) {
       logger.error('Get profile error', error as Error);
+      res.status(500).json({
+        success: false,
+        message: 'Internal server error'
+      });
+    }
+  });
+
+  /**
+   * GET /merchants/profile
+   * Get current merchant profile (alias for /me)
+   */
+  router.get('/profile', async (req: Request, res: Response) => {
+    try {
+      const merchant = await merchantService.getMerchant(req.merchantId!);
+
+      if (!merchant) {
+        res.status(404).json({
+          success: false,
+          message: 'Merchant not found'
+        });
+        return;
+      }
+
+      res.json({
+        success: true,
+        merchant
+      });
+    } catch (error) {
+      logger.error('Get profile error', error as Error);
+      res.status(500).json({
+        success: false,
+        message: 'Internal server error'
+      });
+    }
+  });
+
+  /**
+   * GET /merchants/transactions
+   * List merchant transactions
+   */
+  router.get('/transactions', async (req: Request, res: Response) => {
+    try {
+      const { status, paymentMethod, startDate, endDate, limit, offset } = req.query;
+
+      const transactions = await transactionManager.getTransactions(req.merchantId!, {
+        status: status as string | undefined,
+        paymentMethod: paymentMethod as string | undefined,
+        startDate: startDate ? new Date(startDate as string) : undefined,
+        endDate: endDate ? new Date(endDate as string) : undefined,
+        limit: limit ? parseInt(limit as string, 10) : 50,
+        offset: offset ? parseInt(offset as string, 10) : 0
+      });
+
+      res.json({
+        success: true,
+        transactions: transactions.transactions,
+        total: transactions.total
+      });
+    } catch (error) {
+      logger.error('Get transactions error', error as Error);
+      res.status(500).json({
+        success: false,
+        message: 'Internal server error'
+      });
+    }
+  });
+
+  /**
+   * GET /merchants/stats
+   * Get merchant statistics
+   */
+  router.get('/stats', async (req: Request, res: Response) => {
+    try {
+      const { timeRange } = req.query;
+
+      // Calculate date range based on timeRange
+      let startDate: Date;
+      const endDate = new Date();
+
+      switch (timeRange) {
+        case '24h':
+          startDate = new Date(Date.now() - 24 * 60 * 60 * 1000);
+          break;
+        case '30d':
+          startDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+          break;
+        case '90d':
+          startDate = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+          break;
+        case '7d':
+        default:
+          startDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      }
+
+      const stats = await transactionManager.getStats(req.merchantId!, { startDate, endDate });
+      const dailyVolume = await transactionManager.getDailyVolume(req.merchantId!, 12);
+      const methodBreakdown = await transactionManager.getPaymentMethodBreakdown(req.merchantId!, { startDate, endDate });
+
+      // Format for frontend
+      const revenueChart = dailyVolume.map(d => ({
+        date: new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        amount: d.volume
+      }));
+
+      const paymentMethodBreakdown = methodBreakdown.map((m, i) => ({
+        name: m.method.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+        value: Math.round(m.percentage),
+        color: ['#22c55e', '#3b82f6', '#f59e0b', '#8b5cf6', '#ef4444', '#06b6d4'][i % 6]
+      }));
+
+      res.json({
+        success: true,
+        stats: {
+          totalRevenue: stats.totalVolume,
+          totalTransactions: stats.totalCount,
+          successRate: stats.successRate,
+          activeCustomers: stats.uniqueCustomers || 0,
+          revenueChange: 12.5, // Would calculate from historical data
+          transactionsChange: 8.2,
+          successRateChange: 0.5,
+          customersChange: -2.1
+        },
+        revenueChart,
+        paymentMethodBreakdown
+      });
+    } catch (error) {
+      logger.error('Get stats error', error as Error);
       res.status(500).json({
         success: false,
         message: 'Internal server error'

@@ -87,6 +87,10 @@ export class AirtelMoneyProvider {
       const expiresIn = response.data.expires_in || 3600;
       this.tokenExpiry = new Date(Date.now() + (expiresIn - 60) * 1000);
 
+      if (!this.accessToken) {
+        throw new Error('Airtel Money authentication failed: no access token received');
+      }
+
       return this.accessToken;
     } catch (error) {
       this.logger.error('Failed to get Airtel Money access token', error as Error);

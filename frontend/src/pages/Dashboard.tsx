@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   TrendingUp,
   TrendingDown,
@@ -9,7 +9,8 @@ import {
   DollarSign,
   Users,
   ArrowLeftRight,
-  CheckCircle
+  CheckCircle,
+  RefreshCw
 } from 'lucide-react'
 import {
   AreaChart,
@@ -24,90 +25,199 @@ import {
   Cell
 } from 'recharts'
 import { useAuth } from '../context/AuthContext'
+import { transactionsApi } from '../services/api'
 
-// Mock data
-const revenueData = [
-  { date: 'Jan 1', amount: 125000 },
-  { date: 'Jan 2', amount: 198000 },
-  { date: 'Jan 3', amount: 156000 },
-  { date: 'Jan 4', amount: 245000 },
-  { date: 'Jan 5', amount: 189000 },
-  { date: 'Jan 6', amount: 312000 },
-  { date: 'Jan 7', amount: 278000 },
-  { date: 'Jan 8', amount: 345000 },
-  { date: 'Jan 9', amount: 298000 },
-  { date: 'Jan 10', amount: 412000 },
-  { date: 'Jan 11', amount: 389000 },
-  { date: 'Jan 12', amount: 456000 },
-]
+interface Transaction {
+  id: string
+  reference: string
+  customer?: { firstName?: string; lastName?: string; email?: string; phone: string }
+  amount: number
+  currency: string
+  paymentMethod: string
+  status: string
+  createdAt: string
+}
 
-const paymentMethods = [
+interface DashboardStats {
+  totalRevenue: number
+  totalTransactions: number
+  successRate: number
+  activeCustomers: number
+  revenueChange: number
+  transactionsChange: number
+  successRateChange: number
+  customersChange: number
+}
+
+const defaultPaymentMethods = [
   { name: 'Mobile Money', value: 45, color: '#22c55e' },
   { name: 'Cards', value: 35, color: '#3b82f6' },
   { name: 'Bank Transfer', value: 15, color: '#f59e0b' },
   { name: 'USSD', value: 5, color: '#8b5cf6' },
 ]
 
-const recentTransactions = [
-  { id: 'TXN001', customer: 'John Doe', amount: 25000, currency: 'NGN', method: 'mpesa', status: 'successful', time: '2 mins ago' },
-  { id: 'TXN002', customer: 'Jane Smith', amount: 150, currency: 'USD', method: 'visa', status: 'successful', time: '5 mins ago' },
-  { id: 'TXN003', customer: 'Bob Wilson', amount: 5000, currency: 'KES', method: 'mtn_momo', status: 'pending', time: '8 mins ago' },
-  { id: 'TXN004', customer: 'Alice Brown', amount: 75000, currency: 'NGN', method: 'bank', status: 'successful', time: '12 mins ago' },
-  { id: 'TXN005', customer: 'Charlie Davis', amount: 300, currency: 'GHS', method: 'mastercard', status: 'failed', time: '15 mins ago' },
-]
-
 const methodIcons: Record<string, React.ReactNode> = {
   mpesa: <Smartphone className="w-4 h-4 text-green-600" />,
   mtn_momo: <Smartphone className="w-4 h-4 text-yellow-600" />,
+  airtel_money: <Smartphone className="w-4 h-4 text-red-600" />,
+  orange_money: <Smartphone className="w-4 h-4 text-orange-600" />,
   visa: <CreditCard className="w-4 h-4 text-blue-600" />,
   mastercard: <CreditCard className="w-4 h-4 text-red-600" />,
+  verve: <CreditCard className="w-4 h-4 text-green-600" />,
+  card: <CreditCard className="w-4 h-4 text-gray-600" />,
   bank: <Building className="w-4 h-4 text-gray-600" />,
+  bank_transfer: <Building className="w-4 h-4 text-gray-600" />,
 }
 
 const statusBadges: Record<string, string> = {
   successful: 'badge-success',
+  completed: 'badge-success',
   pending: 'badge-warning',
+  processing: 'badge-warning',
   failed: 'badge-error',
+}
+
+const getCurrencySymbol = (currency: string): string => {
+  const symbols: Record<string, string> = {
+    NGN: '₦', KES: 'KSh', GHS: '₵', ZAR: 'R', TZS: 'TSh',
+    UGX: 'USh', RWF: 'FRw', ETB: 'Br', ZMW: 'K', XOF: 'CFA',
+    XAF: 'FCFA', USD: '$', EUR: '€', GBP: '£'
+  }
+  return symbols[currency] || currency + ' '
+}
+
+const formatTimeSince = (dateStr: string): string => {
+  const date = new Date(dateStr)
+  const now = new Date()
+  const diffMs = now.getTime() - date.getTime()
+  const diffMins = Math.floor(diffMs / 60000)
+
+  if (diffMins < 1) return 'Just now'
+  if (diffMins < 60) return `${diffMins} mins ago`
+
+  const diffHours = Math.floor(diffMins / 60)
+  if (diffHours < 24) return `${diffHours} hours ago`
+
+  const diffDays = Math.floor(diffHours / 24)
+  return `${diffDays} days ago`
 }
 
 export default function Dashboard() {
   const { merchant } = useAuth()
   const [timeRange, setTimeRange] = useState('7d')
+  const [transactions, setTransactions] = useState<Transaction[]>([])
+  const [stats, setStats] = useState<DashboardStats | null>(null)
+  const [revenueData, setRevenueData] = useState<{date: string; amount: number}[]>([])
+  const [paymentMethods, setPaymentMethods] = useState(defaultPaymentMethods)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  const stats = [
+  useEffect(() => {
+    fetchDashboardData()
+  }, [timeRange])
+
+  const fetchDashboardData = async () => {
+    setIsLoading(true)
+    setError(null)
+
+    try {
+      const [txResponse, statsResponse] = await Promise.all([
+        transactionsApi.getAll({ limit: 5 }),
+        transactionsApi.getStats(timeRange)
+      ])
+
+      if (txResponse.transactions) {
+        setTransactions(txResponse.transactions)
+      }
+
+      if (statsResponse) {
+        setStats(statsResponse.stats)
+        if (statsResponse.revenueChart) {
+          setRevenueData(statsResponse.revenueChart)
+        }
+        if (statsResponse.paymentMethodBreakdown) {
+          setPaymentMethods(statsResponse.paymentMethodBreakdown)
+        }
+      }
+    } catch (err) {
+      console.error('Failed to fetch dashboard data:', err)
+      setError('Unable to load dashboard data')
+      generateMockData()
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const generateMockData = () => {
+    const mockStats: DashboardStats = {
+      totalRevenue: 2450000,
+      totalTransactions: 1234,
+      successRate: 98.5,
+      activeCustomers: 5678,
+      revenueChange: 12.5,
+      transactionsChange: 8.2,
+      successRateChange: 0.5,
+      customersChange: -2.1
+    }
+    setStats(mockStats)
+
+    const mockRevenueData = Array.from({ length: 12 }, (_, i) => ({
+      date: `Day ${i + 1}`,
+      amount: Math.floor(Math.random() * 300000) + 100000
+    }))
+    setRevenueData(mockRevenueData)
+
+    setTransactions([
+      { id: 'TXN001', reference: 'TXN001', customer: { firstName: 'John', lastName: 'Doe', phone: '+234...' }, amount: 25000, currency: 'NGN', paymentMethod: 'mpesa', status: 'successful', createdAt: new Date(Date.now() - 120000).toISOString() },
+      { id: 'TXN002', reference: 'TXN002', customer: { firstName: 'Jane', lastName: 'Smith', phone: '+254...' }, amount: 150, currency: 'USD', paymentMethod: 'card', status: 'successful', createdAt: new Date(Date.now() - 300000).toISOString() },
+      { id: 'TXN003', reference: 'TXN003', customer: { firstName: 'Bob', lastName: 'Wilson', phone: '+254...' }, amount: 5000, currency: 'KES', paymentMethod: 'mtn_momo', status: 'pending', createdAt: new Date(Date.now() - 480000).toISOString() },
+      { id: 'TXN004', reference: 'TXN004', customer: { firstName: 'Alice', lastName: 'Brown', phone: '+234...' }, amount: 75000, currency: 'NGN', paymentMethod: 'bank_transfer', status: 'successful', createdAt: new Date(Date.now() - 720000).toISOString() },
+      { id: 'TXN005', reference: 'TXN005', customer: { firstName: 'Charlie', lastName: 'Davis', phone: '+233...' }, amount: 300, currency: 'GHS', paymentMethod: 'card', status: 'failed', createdAt: new Date(Date.now() - 900000).toISOString() },
+    ])
+  }
+
+  const statCards = stats ? [
     {
       name: 'Total Revenue',
-      value: '₦2,450,000',
-      change: '+12.5%',
-      trend: 'up',
+      value: `${getCurrencySymbol(merchant?.currency || 'NGN')}${stats.totalRevenue.toLocaleString()}`,
+      change: `${stats.revenueChange >= 0 ? '+' : ''}${stats.revenueChange}%`,
+      trend: stats.revenueChange >= 0 ? 'up' : 'down',
       icon: DollarSign,
       color: 'bg-green-100 text-green-600'
     },
     {
       name: 'Transactions',
-      value: '1,234',
-      change: '+8.2%',
-      trend: 'up',
+      value: stats.totalTransactions.toLocaleString(),
+      change: `${stats.transactionsChange >= 0 ? '+' : ''}${stats.transactionsChange}%`,
+      trend: stats.transactionsChange >= 0 ? 'up' : 'down',
       icon: ArrowLeftRight,
       color: 'bg-blue-100 text-blue-600'
     },
     {
       name: 'Success Rate',
-      value: '98.5%',
-      change: '+0.5%',
-      trend: 'up',
+      value: `${stats.successRate}%`,
+      change: `${stats.successRateChange >= 0 ? '+' : ''}${stats.successRateChange}%`,
+      trend: stats.successRateChange >= 0 ? 'up' : 'down',
       icon: CheckCircle,
       color: 'bg-purple-100 text-purple-600'
     },
     {
       name: 'Active Customers',
-      value: '5,678',
-      change: '-2.1%',
-      trend: 'down',
+      value: stats.activeCustomers.toLocaleString(),
+      change: `${stats.customersChange >= 0 ? '+' : ''}${stats.customersChange}%`,
+      trend: stats.customersChange >= 0 ? 'up' : 'down',
       icon: Users,
       color: 'bg-orange-100 text-orange-600'
     },
-  ]
+  ] : []
+
+  if (isLoading && !stats) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <RefreshCw className="w-8 h-8 text-primary-600 animate-spin" />
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
@@ -118,6 +228,9 @@ export default function Dashboard() {
             Welcome back, {merchant?.businessName}
           </h1>
           <p className="text-gray-600">Here's what's happening with your payments today.</p>
+          {error && (
+            <p className="text-sm text-amber-600 mt-1">Using demo data - {error}</p>
+          )}
         </div>
         <div className="flex items-center gap-2">
           {['24h', '7d', '30d', '90d'].map((range) => (
@@ -133,12 +246,19 @@ export default function Dashboard() {
               {range}
             </button>
           ))}
+          <button
+            onClick={fetchDashboardData}
+            className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg"
+            title="Refresh data"
+          >
+            <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+          </button>
         </div>
       </div>
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {stats.map((stat) => (
+        {statCards.map((stat) => (
           <div key={stat.name} className="stat-card">
             <div className="flex items-center justify-between mb-4">
               <div className={`p-2 rounded-lg ${stat.color}`}>
@@ -182,9 +302,9 @@ export default function Dashboard() {
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis dataKey="date" stroke="#9ca3af" fontSize={12} />
-                <YAxis stroke="#9ca3af" fontSize={12} tickFormatter={(v) => `₦${v/1000}k`} />
+                <YAxis stroke="#9ca3af" fontSize={12} tickFormatter={(v) => `${getCurrencySymbol(merchant?.currency || 'NGN')}${v/1000}k`} />
                 <Tooltip
-                  formatter={(value: number) => [`₦${value.toLocaleString()}`, 'Revenue']}
+                  formatter={(value: number) => [`${getCurrencySymbol(merchant?.currency || 'NGN')}${value.toLocaleString()}`, 'Revenue']}
                   contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }}
                 />
                 <Area
@@ -244,9 +364,9 @@ export default function Dashboard() {
       <div className="card">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-lg font-semibold text-gray-900">Recent Transactions</h2>
-          <button className="text-sm text-primary-600 hover:text-primary-700 flex items-center gap-1">
+          <a href="/transactions" className="text-sm text-primary-600 hover:text-primary-700 flex items-center gap-1">
             View All <ArrowUpRight className="w-4 h-4" />
-          </button>
+          </a>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -261,38 +381,49 @@ export default function Dashboard() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {recentTransactions.map((tx) => (
-                <tr key={tx.id} className="hover:bg-gray-50">
-                  <td className="py-3 px-3">
-                    <span className="font-mono text-sm text-gray-900">{tx.id}</span>
-                  </td>
-                  <td className="py-3 px-3">
-                    <span className="text-sm text-gray-900">{tx.customer}</span>
-                  </td>
-                  <td className="py-3 px-3">
-                    <span className="text-sm font-medium text-gray-900">
-                      {tx.currency === 'NGN' ? '₦' : tx.currency === 'USD' ? '$' : tx.currency === 'KES' ? 'KSh' : '₵'}
-                      {tx.amount.toLocaleString()}
-                    </span>
-                  </td>
-                  <td className="py-3 px-3">
-                    <div className="flex items-center gap-2">
-                      {methodIcons[tx.method]}
-                      <span className="text-sm text-gray-600 capitalize">
-                        {tx.method.replace('_', ' ')}
-                      </span>
-                    </div>
-                  </td>
-                  <td className="py-3 px-3">
-                    <span className={`badge ${statusBadges[tx.status]} capitalize`}>
-                      {tx.status}
-                    </span>
-                  </td>
-                  <td className="py-3 px-3">
-                    <span className="text-sm text-gray-500">{tx.time}</span>
+              {transactions.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="py-8 text-center text-gray-500">
+                    No transactions yet
                   </td>
                 </tr>
-              ))}
+              ) : (
+                transactions.map((tx) => (
+                  <tr key={tx.id} className="hover:bg-gray-50">
+                    <td className="py-3 px-3">
+                      <span className="font-mono text-sm text-gray-900">{tx.reference}</span>
+                    </td>
+                    <td className="py-3 px-3">
+                      <span className="text-sm text-gray-900">
+                        {tx.customer?.firstName && tx.customer?.lastName
+                          ? `${tx.customer.firstName} ${tx.customer.lastName}`
+                          : tx.customer?.email || tx.customer?.phone || 'Anonymous'}
+                      </span>
+                    </td>
+                    <td className="py-3 px-3">
+                      <span className="text-sm font-medium text-gray-900">
+                        {getCurrencySymbol(tx.currency)}{tx.amount.toLocaleString()}
+                      </span>
+                    </td>
+                    <td className="py-3 px-3">
+                      <div className="flex items-center gap-2">
+                        {methodIcons[tx.paymentMethod] || <CreditCard className="w-4 h-4 text-gray-400" />}
+                        <span className="text-sm text-gray-600 capitalize">
+                          {tx.paymentMethod.replace(/_/g, ' ')}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="py-3 px-3">
+                      <span className={`badge ${statusBadges[tx.status] || 'badge-default'} capitalize`}>
+                        {tx.status}
+                      </span>
+                    </td>
+                    <td className="py-3 px-3">
+                      <span className="text-sm text-gray-500">{formatTimeSince(tx.createdAt)}</span>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>

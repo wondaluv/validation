@@ -5,7 +5,6 @@ import {
   LayoutDashboard,
   Users,
   ArrowLeftRight,
-  Settings,
   Menu,
   X,
   LogOut,
@@ -23,7 +22,7 @@ const navigation = [
 export default function AdminLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
-  const { merchant, logout } = useAuth()
+  const { logout } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
 

@@ -146,11 +146,27 @@ async function main() {
   });
 
   // Public routes (no auth required)
+  const merchantRouter = createMerchantRoutes(merchantService, transactionManager);
   const publicMerchantRouter = express.Router();
-  publicMerchantRouter.post('/register', createMerchantRoutes(merchantService, transactionManager).stack.find(r => r.route?.path === '/register')?.route?.stack[0]?.handle as express.RequestHandler);
-  publicMerchantRouter.post('/login', createMerchantRoutes(merchantService, transactionManager).stack.find(r => r.route?.path === '/login')?.route?.stack[0]?.handle as express.RequestHandler);
+
+  // Extract public routes from the full router
+  merchantRouter.stack.forEach(layer => {
+    if (layer.route) {
+      const path = layer.route.path;
+      if (path === '/register' || path === '/login' || path === '/authenticate') {
+        layer.route.stack.forEach((routeLayer: { handle: express.RequestHandler; method: string }) => {
+          if (routeLayer.method === 'post') {
+            publicMerchantRouter.post(path, routeLayer.handle);
+          }
+        });
+      }
+    }
+  });
 
   app.use('/api/v1/merchants', publicMerchantRouter);
+
+  // Also expose on /api/merchants for frontend compatibility
+  app.use('/api/merchants', publicMerchantRouter);
 
   // Protected routes (API key auth)
   const apiKeyAuth = createApiKeyAuth(merchantService);
@@ -161,7 +177,10 @@ async function main() {
   app.use('/api/v1/payouts', apiKeyAuth, createPayoutRoutes(paymentProcessor));
 
   // Merchant routes (JWT auth)
-  app.use('/api/v1/merchants', jwtAuth, createMerchantRoutes(merchantService, transactionManager));
+  app.use('/api/v1/merchants', jwtAuth, merchantRouter);
+
+  // Also expose protected routes on /api/merchants for frontend compatibility
+  app.use('/api/merchants', jwtAuth, merchantRouter);
 
   // Webhook callback endpoints (for payment providers)
   app.post('/webhooks/mpesa', express.json(), (req, res) => {

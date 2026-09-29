@@ -171,6 +171,12 @@ export interface Transaction {
   reference: string;
   merchantId: string;
   customerId?: string;
+  customer?: {
+    phone: string;
+    email?: string;
+    firstName?: string;
+    lastName?: string;
+  };
   type: TransactionType;
   status: TransactionStatus;
   paymentMethod: PaymentMethod;

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Plus, Search, Send, Smartphone, Building, CheckCircle, Clock, XCircle } from 'lucide-react'
+import { Plus, Send, Smartphone, Building, CheckCircle, Clock, XCircle } from 'lucide-react'
 
 const payouts = [
   { id: 'PO001', recipient: 'John Doe', phone: '+234801234567', type: 'mobile_money', provider: 'MTN MoMo', amount: 50000, currency: 'NGN', status: 'successful', date: '2024-01-10' },

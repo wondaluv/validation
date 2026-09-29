@@ -75,6 +75,10 @@ export class MpesaProvider {
       // Token typically valid for 1 hour, refresh at 50 minutes
       this.tokenExpiry = new Date(Date.now() + 50 * 60 * 1000);
 
+      if (!this.accessToken) {
+        throw new Error('M-Pesa authentication failed: no access token received');
+      }
+
       return this.accessToken;
     } catch (error) {
       this.logger.error('Failed to get M-Pesa access token', error as Error);

@@ -7,6 +7,7 @@ import { Router, Request, Response } from 'express';
 import { PaymentProcessor } from '../../core/PaymentProcessor';
 import { InitializePaymentSchema, PayoutSchema } from '../../utils/validators';
 import { Logger } from '../../utils/Logger';
+import { TransactionStatus, TransactionType } from '../../types';
 
 const logger = new Logger('PaymentRoutes');
 
@@ -141,8 +142,8 @@ export function createPaymentRoutes(paymentProcessor: PaymentProcessor): Router 
       const result = await paymentProcessor.getMerchantTransactions(
         req.merchantId!,
         {
-          status: status as string | undefined,
-          type: type as string | undefined,
+          status: status as TransactionStatus | undefined,
+          type: type as TransactionType | undefined,
           startDate: startDate ? new Date(startDate as string) : undefined,
           endDate: endDate ? new Date(endDate as string) : undefined,
           limit: parseInt(limit as string, 10),
@@ -275,7 +276,7 @@ export function createPayoutRoutes(paymentProcessor: PaymentProcessor): Router {
       const result = await paymentProcessor.getMerchantTransactions(
         req.merchantId!,
         {
-          type: 'payout',
+          type: TransactionType.PAYOUT,
           limit: parseInt(limit as string, 10),
           offset: parseInt(offset as string, 10)
         }

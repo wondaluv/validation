@@ -27,12 +27,14 @@ export interface TransactionQuery {
 
 export interface TransactionStats {
   totalTransactions: number;
+  totalCount: number;
   successfulTransactions: number;
   failedTransactions: number;
   totalVolume: number;
   totalFees: number;
   averageAmount: number;
   successRate: number;
+  uniqueCustomers: number;
 }
 
 export class TransactionManager {
@@ -207,6 +209,30 @@ export class TransactionManager {
   }
 
   /**
+   * Get transactions with flexible query
+   */
+  async getTransactions(
+    merchantId: string,
+    options?: {
+      status?: string;
+      paymentMethod?: string;
+      startDate?: Date;
+      endDate?: Date;
+      limit?: number;
+      offset?: number;
+    }
+  ): Promise<{ transactions: Transaction[]; total: number }> {
+    return this.findByMerchant(merchantId, {
+      status: options?.status as TransactionStatus | undefined,
+      paymentMethod: options?.paymentMethod as PaymentMethod | undefined,
+      startDate: options?.startDate,
+      endDate: options?.endDate,
+      limit: options?.limit,
+      offset: options?.offset
+    });
+  }
+
+  /**
    * Get transaction statistics for a merchant
    */
   async getStats(
@@ -229,16 +255,21 @@ export class TransactionManager {
     const totalVolume = successful.reduce((sum, tx) => sum + tx.amount, 0);
     const totalFees = successful.reduce((sum, tx) => sum + tx.fee, 0);
 
+    // Count unique customers by phone
+    const uniquePhones = new Set(transactions.map(tx => tx.customer?.phone).filter(Boolean));
+
     return {
       totalTransactions: transactions.length,
+      totalCount: transactions.length,
       successfulTransactions: successful.length,
       failedTransactions: failed.length,
       totalVolume,
       totalFees,
       averageAmount: successful.length > 0 ? totalVolume / successful.length : 0,
       successRate: transactions.length > 0
-        ? (successful.length / transactions.length) * 100
-        : 0
+        ? Math.round((successful.length / transactions.length) * 1000) / 10
+        : 0,
+      uniqueCustomers: uniquePhones.size
     };
   }
 

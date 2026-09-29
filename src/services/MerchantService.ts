@@ -145,6 +145,9 @@ export class MerchantService {
     }
 
     // Generate JWT
+    const expiresInMs = this.jwtExpiresIn === '24h' ? 86400 :
+                        this.jwtExpiresIn === '1h' ? 3600 :
+                        this.jwtExpiresIn === '7d' ? 604800 : 86400;
     const token = jwt.sign(
       {
         merchantId: merchant.id,
@@ -152,7 +155,7 @@ export class MerchantService {
         isLive: merchant.isLive
       },
       this.jwtSecret,
-      { expiresIn: this.jwtExpiresIn }
+      { expiresIn: expiresInMs }
     );
 
     const { secretKey, ...merchantData } = merchant;

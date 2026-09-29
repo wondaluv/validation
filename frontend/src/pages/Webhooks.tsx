@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Webhook, Plus, Copy, Check, Trash2, TestTube, CheckCircle, XCircle } from 'lucide-react'
+import { Webhook, Copy, Check, TestTube, CheckCircle, XCircle } from 'lucide-react'
 
 const webhookEvents = [
   { id: 'payment.successful', label: 'Payment Successful', description: 'When a payment is completed' },

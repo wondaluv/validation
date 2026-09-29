@@ -6,8 +6,13 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc",
+    "build:frontend": "cd frontend && npm run build",
+    "build:all": "npm run build && npm run build:frontend",
     "start": "node dist/index.js",
     "dev": "ts-node src/index.ts",
+    "dev:frontend": "cd frontend && npm run dev",
+    "dev:all": "concurrently \"npm run dev\" \"npm run dev:frontend\"",
+    "install:all": "npm install && cd frontend && npm install",
     "test": "jest",
     "lint": "eslint src/**/*.ts"
   },
@@ -44,6 +49,8 @@
     "@types/jsonwebtoken": "^9.0.5",
     "@types/node": "^20.10.0",
     "@types/uuid": "^9.0.7",
+    "concurrently": "^8.2.2",
+    "ts-node": "^10.9.2",
     "typescript": "^5.3.2"
   }
 }

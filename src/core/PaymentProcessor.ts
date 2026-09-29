@@ -139,7 +139,7 @@ export class PaymentProcessor {
 
       return result;
     } catch (error) {
-      this.logger.error('Payment initialization failed', error);
+      this.logger.error('Payment initialization failed', error instanceof Error ? error : undefined);
       return {
         success: false,
         message: 'Payment initialization failed',
@@ -188,7 +188,7 @@ export class PaymentProcessor {
         }
       };
     } catch (error) {
-      this.logger.error('Payment verification failed', error);
+      this.logger.error('Payment verification failed', error instanceof Error ? error : undefined);
       return {
         success: false,
         message: 'Verification failed',
@@ -253,7 +253,7 @@ export class PaymentProcessor {
         return this.processBankPayout(transaction, request);
       }
     } catch (error) {
-      this.logger.error('Payout processing failed', error);
+      this.logger.error('Payout processing failed', error instanceof Error ? error : undefined);
       return {
         success: false,
         transactionId: '',
@@ -337,7 +337,7 @@ export class PaymentProcessor {
         message: 'Refund processed successfully'
       };
     } catch (error) {
-      this.logger.error('Refund processing failed', error);
+      this.logger.error('Refund processing failed', error instanceof Error ? error : undefined);
       return {
         success: false,
         message: error instanceof Error ? error.message : 'Refund failed'
