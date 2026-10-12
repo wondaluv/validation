@@ -5,11 +5,11 @@
 | | |
 |---|---|
 | Document ID | NYA-INTEL-SYNTH-001 |
-| Version | **DRAFT v0.4.0** — for founder review. Nothing in this document is authorised for implementation until ruled. |
-| Supersedes | DRAFT v0.3.0, v0.2.0, v0.1.0 (all 2026-10-12) |
+| Version | **DRAFT v0.5.0** — final drafting pass. Carries the **proposed** founder decision record (§14); nothing is authorised until the founder records the rulings. |
+| Supersedes | DRAFT v0.4.0, v0.3.0, v0.2.0, v0.1.0 (all 2026-10-12) |
 | Classification | INTERNAL |
 | Programme | Nyansapo — Intelligence plane |
-| Review basis | Three code-grounded reviews (v0.1.0, v0.2.0, v0.3.0) against `origin/main` `62ead3c54cf984c37d17d9d2b1f4d7b38d5d19ea` (11 Oct 2026); evidence manifests `…-code-evidence.json`, `…-v02-evidence.json`, `…-v03-evidence.json` (the last records three isolated counterexamples). Live data, deployed state and the published PR bytes were not verified by any review. |
+| Review basis | Three code-grounded reviews (v0.1.0, v0.2.0, v0.3.0) and a proposed founder decision record on v0.4.0 against `origin/main` `62ead3c54cf984c37d17d9d2b1f4d7b38d5d19ea` (11 Oct 2026); evidence manifests `…-code-evidence.json`, `…-v02-evidence.json`, `…-v03-evidence.json` (the last records three isolated counterexamples). Live data, deployed state and the published PR bytes were not verified by any review. |
 | Depends on | NYA-PROVENANCE-EXPLORER-001 PR-0; `applicability_sufficiency.py` evaluation semantics; `governed_verification_service.py`; `KeyManager`; `AuditChain`; ingest prerequisites **IS-P0, IS-P2, IS-P3** (§5.0) |
 | Decision effect | `CONTEXT_ONLY`. `decision_effect_allowed = FALSE`, hardwired, not flag-controlled. |
 | Author | Prepared with Claude for Omaida Ali, 2026-10-12 |
@@ -18,7 +18,18 @@
 
 ## 0. Change log
 
-### 0.1 v0.3.0 → v0.4.0 (third review)
+### 0.1 v0.4.0 → v0.5.0 (final pass — proposed decision record)
+
+| # | v0.4.0 defect | Finding | v0.5.0 disposition |
+|---|---|---|---|
+| U1 | §10.1 computed the header from latest releases and officer windows **before** the idempotency lookup; `execution_id` included the bundle digest, which does not exist at that point. | A retry after release R2 is admitted cannot recover its original execution by `as_of` alone. | Client-scoped immutable request mapping `intel_request_map (client_id, request_key) → assessment_id` consulted **first**; retrieval by `assessment_id` always available; a new evaluation is a new assessment. `append_in_tx` named explicitly in the atomic path (§10.1, §9.1). |
+| U2 | Projection admissibility `parsed + exceptions == artifact_row_count` treated as degree completeness. | 49 parsed at an address + 2 unattributable exceptions passes a threshold of 50 unsafely. | Address degree carries a **lower and upper bound**; `PASS` iff upper ≤ 50, `FAIL` iff lower > 50, else `UNKNOWN`. Exceptions retain identity and content; duplicate-company rows are exceptions; projection is **sealed** (no INSERT/UPDATE/DELETE after `sealed_at`, content digest + parser/normaliser version bound) (§5.0 IS-P2). |
+| U3 | `observed_current_through = W_p.end` for every item. | An item on page 1 at `d1` is not observed through the last page's `d2`. | Per-item `observed_through = timestamp of the page the item appeared on`; `W_p` retained as acquisition metadata only; same item with different content across pages → `UNKNOWN(DRIFT)` (§5.0 IS-P2, §5.4). |
+| U4 | FD-IS16 tuple presented as appointment identity. | The appointment-list schema makes `appointed_on` and `name_elements` optional and documents no item-level stable id. | Tuple is a **matching key**; canonical full-item digests retained; equal-key/different-digest → `UNKNOWN(IDENTITY_AMBIGUOUS)`; null key components → `UNKNOWN(TUPLE_INCOMPLETE)`; identical digests are duplicates counted once; fixtures added (§5.0 IS-P2, A5b). `rule_status[]` carries `binding_id` and the bound values (§5.5, §6.2). |
+| U5 | §13 retired the rule family automatically after two failed re-rulings; IS-P3(b) still appeared as a selectable v1 alternative; stale labels and the register cross-reference. | Retirement is a founder act; (b) is a distinct weaker contract. | Automatic retirement replaced by a mandatory founder disposition (retain blocked / authorise redesign / retire). IS-P3(b) removed from the v1 acceptance contract and kept only in decision history. Labels and cross-references fixed (§5.0, §13.2). |
+| U6 | §14 listed recommendations. | The founder has not yet ruled. | §14 is now a **proposed decision record**: ruling text and implementation contract per decision, each marked *proposed — awaiting founder signature*. Nothing in it is treated as adopted by this document. |
+
+### 0.2 v0.3.0 → v0.4.0 (third review)
 
 | # | v0.3.0 defect | Finding (counterexample where executed) | v0.4.0 disposition |
 |---|---|---|---|
@@ -33,11 +44,11 @@
 | T9 | §13.0 "benchmark chain id" and admin purge route. | `audit_chain` has no chain-id column; a different lock id cannot partition it; purging contradicts append-only retention and the zero-grant gate. | Benchmarks run in a **disposable isolated database** with its own audit table; signed acceptance bundle and replay inputs exported before disposal; no purge authority on production tables (§13.0). |
 | T10 | `mode` lived outside the signed body. | A receipt could not attest which purpose it served. | `mode` is in the execution header and in the signature domain prefix (§6.2, §11.2). |
 | T11 | §11.3 implied all chain callers must supply transactions. | Existing callers own their connections. | Legacy `append` becomes an owning-connection wrapper delegating to a shared serialised helper; `append_in_tx` delegates with the caller's connection; both take the same lock; all writers re-checked at implementation (§11.3). |
-| T12 | Deferred register used "blocked" in place of approval status. | Blocked is an execution state, not an approval state. | Register carries separate **Approval** and **Execution** columns (§0.3). |
+| T12 | Deferred register used "blocked" in place of approval status. | Blocked is an execution state, not an approval state. | Register carries separate **Approval** and **Execution** columns (§0.5). |
 | T13 | A7 would have measured an inconsistent interval definition. | Definition-induced misses are not evidence about association quality. | Input-feasibility census (A6a) precedes benchmark assembly; A7 runs only on the corrected temporal rule (§13.2). |
 | T14 | FD-IS15(a) read as "attach a batch id". | A label is not provenance. | (a) binds the **source-response content** to the signed batch (§5.0 IS-P3). |
 
-### 0.2 v0.2.0 → v0.3.0 (follow-up review)
+### 0.3 v0.2.0 → v0.3.0 (follow-up review)
 
 | # | v0.2.0 defect | Finding | v0.3.0 disposition |
 |---|---|---|---|
@@ -60,14 +71,14 @@
 | S17 | `investigation_ref` joined on synthesis fact ids. | Investigations index entities and fields, not fact ids. | Correlation by entity/field, labelled `correlation: ENTITY_FIELD`, carried in the **envelope** (non-canonical) or null (§12.2). |
 | S18 | A4 assumed every IS-P0 support reaches a signed batch. | Stream/backfill writers do not route via `raw_entities → batch_provenance`. | New prerequisite **IS-P3**: officer acquisition provenance, or A4 narrows to what is actually batch-bound (§5.0, §13.1). |
 | S19 | Engine reads `ACTIVE` rules; phasing activates only after benchmark. | Draft rules could not be benchmarked. | `BENCHMARK` execution mode with a pinned candidate rule set, isolated from the activation boundary, never served to clients (§13.0). |
-| S20 | Deferred register implied authority to postpone. | Deferral is sequencing, not approval. | Register carries an approval state per item (§0.3). FD-IS2/FD-IS6 marked *recommended, awaiting ruling*, not resolved. |
+| S20 | Deferred register implied authority to postpone. | Deferral is sequencing, not approval. | Register carries an approval state per item (now §0.5). FD-IS2/FD-IS6 marked *recommended, awaiting ruling*, not resolved. |
 | S21 | Statement that "every rule suppresses" without completeness. | Rule 005 is not degree-guarded. | Corrected: only degree-guarded rules (001, 002, hence 004) suppress; 005 runs. |
 
-### 0.3 v0.1.0 → v0.2.0 (first review) — retained for the record
+### 0.4 v0.1.0 → v0.2.0 (first review) — retained for the record
 
 R1 sibling evaluator, not AOT generalisation · R2 new assessment canonicaliser · R3 investigations are not dual-controlled overrides; overrides deferred · R4 public verify removed · R5 facts materialised for replay (Silver is upserted in place) · R6 `officer_id` is the appointment self-link; IS-P0 person id · R7 no address occupancy intervals; rule 002 → point-in-time · R8 three-valued guards · R9 only `UNKNOWN` spawns hypotheses · R10 rule DAG · R11 migrations auto-discovered · R12 serialised audit append · R13 execution identity by input hash · R14 benchmark rates with intervals.
 
-### 0.4 Deferred register — approval and execution state
+### 0.5 Deferred register — approval and execution state
 
 "Blocked" is an execution state and never replaces an approval state. Previously approved items remain approved while blocked.
 
@@ -213,19 +224,20 @@ The AOT adapter inspects the bounded outcome and pinned policy context of the `a
 
 *Officer degree — per-officer paginated acquisition (bounded alternative to acquiring the officer universe).*
 - Acquire `/officers/{ch_person_id}/appointments` **unfiltered** (no `filter=active`; active-at-`t` is computed from dates), page by page, retaining per page: `start_index`, `items_per_page`, request parameters, response digest, HTTP outcome, `total_results` as reported on that page, ETag if present, timestamp.
-- **Distinct-item coverage**: appointment identity = `(appointed_to.company_number, appointed_on, officer_role, name_elements digest)` **[FD-IS16 — identity policy]**. Acquisition is complete only if distinct items = `total_results`, `total_results` is identical on every page, no page is a byte-duplicate of another, and no page failed. Otherwise degree is `UNKNOWN(ACQUISITION_INCOMPLETE)`. A count-only check is explicitly insufficient (counterexample: same 50-item page twice passes `100 == 100`).
-- **Observation window `W_p`** = `[first page timestamp, last page timestamp]` for officer *p*. The appointment facts and the degree observation for *p* are bound to `W_p`. `observed_current_through(p) = W_p.end` (date precision).
-- **Counting predicate**: `officer_degree(p, t)` = number of **distinct company numbers** with an appointment of *p* whose tenure contains `t` under §5.4 membership rules, across all roles. Appointments with `UNKNOWN(FIELD_MISSING)` tenure count toward an `uncounted` figure; if `uncounted > 0` the degree is `UNKNOWN(TENURE_UNKNOWN)`.
+- **Distinct-item coverage** under a **versioned, acquisition-scoped matching policy** [FD-IS16]. Every raw item is retained with a canonical full-item digest. Matching key = `(appointed_to.company_number, appointed_on, officer_role, name_elements digest)`; it is a *matching key*, not a proven unique appointment identity (the official appointment-list schema makes `appointed_on` and `name_elements` optional and documents no item-level stable id; the item link is to the company, and the company-officer self-link retained by the existing writer is not assumed to appear here). Rules: identical digests → one item (duplicate); equal key with different digests → `UNKNOWN(IDENTITY_AMBIGUOUS)`; any null key component → `UNKNOWN(TUPLE_INCOMPLETE)`; a page byte-identical to another → `UNKNOWN(ACQUISITION_INCOMPLETE)`; `total_results` differing between pages, any failed page, or distinct items ≠ `total_results` → `UNKNOWN(ACQUISITION_INCOMPLETE)`. A count-only check is explicitly insufficient (counterexample: same 50-item page twice passes `100 == 100`). Stable counts and no duplicate pages are drift checks, not proof of an atomic snapshot.
+- **Per-item observation**: each item's `observed_through` = the timestamp of the page on which it was acquired. An item on page 1 is **not** observed through the last page's timestamp. If the same item (by digest or key) appears on two pages with different content → `UNKNOWN(DRIFT)` for that officer's degree.
+- **Acquisition window `W_p`** = `[first page timestamp, last page timestamp]`, retained as metadata only; it never substitutes for per-item `observed_through`.
+- **Counting predicate**: `officer_degree(p, t)` = number of **distinct company numbers** with an appointment of *p* whose tenure contains `t` under §5.4 membership rules (each item censored at its own `observed_through`), across all roles. Appointments with `UNKNOWN(FIELD_MISSING)` tenure count toward an `uncounted` figure; if `uncounted > 0` the degree is `UNKNOWN(TENURE_UNKNOWN)`.
 - Limitation stated in the bundle: this is evidence about a Companies House officer key, not proof that all records of one real-world person are unified under it.
 
 *Address membership and degree — release-scoped immutable projection.*
-- For each admitted bulk company release `R`: verify the retained artifact against `artifact_checksum`, parse it **once** into `ukch_company_release_projection (release_id, company_number, registered_address_norm, normalization_version, company_status, parsed_at)` with `PRIMARY KEY (release_id, company_number)` and **no `UPDATE` grant to any role**. Record `population_def`, `snapshot_at`, `artifact_row_count`, `parsed_row_count`, and an exceptions list; the projection is admissible for synthesis only if `parsed_row_count + len(exceptions) == artifact_row_count`.
-- Rule 002 pair facts and `address_degree` are read **only** from the projection for the same `R` (C15). The evolving Silver table is never the release.
-- `address_degree(addr_norm, R)` = count of rows in projection `R` with that `registered_address_norm` and `company_status = active`.
+- For each admitted bulk company release `R`: verify the retained artifact against `artifact_checksum`, parse it **once** into `ukch_company_release_projection (release_id, company_number, registered_address_norm, normalization_version, company_status, parsed_at)` with `PRIMARY KEY (release_id, company_number)`. Record `population_def`, `snapshot_at`, `artifact_row_count`, `parsed_row_count`, parser version, normaliser version, and an **exceptions table** `ukch_company_release_exceptions (release_id, artifact_row_ref, reason, retained_content_digest, candidate_address_norm NULL)` — a duplicate company number in the artifact is an exception, not a silent overwrite. The projection is **sealed** when `parsed_row_count + exception_count == artifact_row_count`: `sealed_at` and `content_digest` are recorded, and a trigger rejects **INSERT, UPDATE and DELETE** on both tables for that `release_id` thereafter. An unsealed projection is inadmissible.
+- Rule 002 pair facts and `address_degree` are read **only** from a sealed projection for the same `R` (C15). The evolving Silver table is never the release.
+- `address_degree(addr_norm, R)` is a **bounded** observation: `lower` = active rows in projection `R` with that `registered_address_norm`; `upper` = `lower` + exceptions for `R` whose `candidate_address_norm` equals `addr_norm` or is null (unattributable). Guard: `PASS` iff `upper ≤ 50`; `FAIL` iff `lower > 50`; otherwise `UNKNOWN(DEGREE_BOUNDS)`. Both bounds, the exception refs and the projection `content_digest` are frozen into the bundle. Parsing reconciliation is not degree completeness.
 
 *Common.* Fix the officer backfill to paginate and to distinguish *empty* from *failed*. Every degree observation (value, method, evidence refs, population or `W_p`, reasons) is frozen into the bundle. Release admission ≠ completeness.
 
-**IS-P3 — officer acquisition provenance.** The stream and backfill writers do not route through `raw_entities → batch_provenance`. Either (a) wrap IS-P0/IS-P2 acquisition in a signed batch whose Merkle root **binds the source-response content** (the retained page payloads and officer items), not merely a `batch_id` label on the row; or (b) A4 narrows to "every support that is batch-bound leads to a signed batch; supports that are not are listed with `provenance: UNBATCHED`" as an explicitly weaker evidence guarantee. **[FD-IS15]** — (a) recommended; (b) requires a founder ruling and is not equivalent compliance.
+**IS-P3 — officer acquisition provenance.** The stream and backfill writers do not route through `raw_entities → batch_provenance`. The v1 acceptance contract is **(a)**: IS-P0/IS-P2 acquisition is wrapped in a signed batch whose Merkle root **binds the source-response content** (retained page payloads and officer items), not merely a `batch_id` label on the row. When wrapping already-retained historical payloads, the original acquisition metadata (timestamps, parameters, digests) is preserved; the batch signing timestamp is not a new acquisition timestamp. If (a) is blocked, the dependency is recorded and the slice waits; a weaker `UNBATCHED` guarantee is **not** part of this contract and would require a distinct founder ruling (decision history: FD-IS15, §14).
 
 ### 5.1 Rule schema
 
@@ -265,7 +277,7 @@ The expression evaluator is a sibling of `applicability_sufficiency.py`'s predic
 | Guard | Definition | Value |
 |---|---|---|
 | `officer_degree` | `officer_degree(p, t_R)` per the IS-P2 counting predicate. | `PASS` ≤ 20; `FAIL` > 20; `UNKNOWN` if acquisition incomplete or any tenure unknown. |
-| `address_degree` | `address_degree(addr_norm, R)` from the release projection per IS-P2. | `PASS` ≤ 50; `FAIL` > 50; `UNKNOWN` if the projection for `R` is not admissible. |
+| `address_degree` | Bounded `address_degree(addr_norm, R)` from the sealed projection per IS-P2. | `PASS` iff `upper ≤ 50`; `FAIL` iff `lower > 50`; `UNKNOWN` otherwise or if the projection is unsealed. |
 | `officer_role_class` | Role ∈ {`secretary`, corporate secretary service}. | `PASS` otherwise; `FAIL` if in set; `UNKNOWN` if role missing. |
 | `temporal_overlap_min_days` | Overlap of appointment intervals per §5.4 date semantics. | `PASS` ≥ 30; `FAIL` < 30; `UNKNOWN` if either interval is `UNKNOWN`. |
 
@@ -280,10 +292,10 @@ Person: admissible only via `ch_person_id` (IS-P0). Company: `entity_lineage` me
 **Date semantics (all rules).** Dates are ISO-8601 at day precision. A tenure has a start `appointed_on` and **one of two distinct end kinds**:
 
 - `resigned_on` present → tenure `[appointed_on, resigned_on)`; the resignation date is an **exclusive** source endpoint.
-- `resigned_on` absent → tenure `[appointed_on, observed_current_through]` where `observed_current_through = W_p.end` from IS-P2; this is an **inclusive censoring boundary**, not a resignation. The bundle records `end_kind: RESIGNED | CENSORED`.
+- `resigned_on` absent → tenure `[appointed_on, observed_through]` where `observed_through` is **that item's own** page timestamp from IS-P2 (not `W_p.end`); this is an **inclusive censoring boundary**, not a resignation. The bundle records `end_kind: RESIGNED | CENSORED` and the `observed_through` value per item.
 - `appointed_on` absent → tenure `UNKNOWN(FIELD_MISSING)`; no start is ever invented; the fact's existence remains `TRUE`.
 
-Membership of a day `t` in a tenure: `appointed_on ≤ t` **and** (`end_kind = RESIGNED` ⇒ `t < resigned_on`; `end_kind = CENSORED` ⇒ `t ≤ observed_current_through`). Overlap of two tenures is the set of days in both; its length is in whole days, computed with the same membership rule at each end. Required test cases: officer observation before, equal to and after `t_R`; true resignation exactly on `t_R` (excluded); both tenures censored; one censored one resigned. The counterexample `[1 Jan, 1 Oct)` vs `t_R = 1 Oct` must evaluate `t_R ∈ tenure` under `CENSORED` and `t_R ∉ tenure` under `RESIGNED`.
+Membership of a day `t` in a tenure: `appointed_on ≤ t` **and** (`end_kind = RESIGNED` ⇒ `t < resigned_on`; `end_kind = CENSORED` ⇒ `t ≤ observed_through`). Overlap of two tenures is the set of days in both; its length is in whole days, computed with the same membership rule at each end. Required test cases: item observation before, equal to and after `t_R`; true resignation exactly on `t_R` (excluded); both tenures censored; one censored one resigned; an appointment whose content changes between pages with unchanged `total_results` (→ `UNKNOWN(DRIFT)`). The counterexample `[1 Jan, 1 Oct)` vs `t_R = 1 Oct` must evaluate `t_R ∈ tenure` under `CENSORED` and `t_R ∉ tenure` under `RESIGNED`.
 
 **Observation contract (rules 002, 004).** Current registered addresses are compared **only within one named, admitted company release** `R` with snapshot boundary `t_R`, read from the release projection (C15). Equality asserts co-location *as of* `t_R`. The request's `as_of` does not reinterpret current rows as historical observations (C14).
 
@@ -303,7 +315,7 @@ No hypothesis form. If A or B is absent from projection `R` → terminal status 
 **NYA-INT-ASSOC-004 — `ASSOCIATION_CLUSTER_SUPPORTED(A, B)`** — `INFERENCE`
 `depends_on: [001, 002]`.
 P1 (necessary, dependency): rule 001 for (A,B).
-P2 (necessary, dependency): rule 002 for (A,B) in release `R` **and** `t_R ∈ I_A ∩ I_B` under the §5.4 membership rule (a censored tenure includes `t_R` when `t_R ≤ observed_current_through`).
+P2 (necessary, dependency): rule 002 for (A,B) in release `R` **and** `t_R ∈ I_A ∩ I_B` under the §5.4 membership rule (a censored tenure includes `t_R` when `t_R ≤` that item's `observed_through`).
 `hypothesis_min_true: 1`. One dependency `TRUE`, the other `UNKNOWN` → `HYPOTHESIS` naming the missing one. Either `CLOSED` → closed; either `SUPPRESSED` → suppressed (C13). Never consults ownership (C2).
 
 **NYA-INT-ASSOC-005 — `RELATIONSHIP_EVIDENCE_CONFLICTED`** — `CONFLICT`
@@ -311,7 +323,7 @@ P1 (necessary): two admissible facts in the bundle assert incompatible values fo
 
 ### 5.5 Dependency DAG and status propagation
 
-Loader builds the DAG from `depends_on`, rejects cycles, evaluates topologically (rule id tiebreak). Each `(rule, binding)` terminal status — `EMITTED(class)`, `HYPOTHESIS`, `UNRESOLVED(reasons)`, `CLOSED(reason)`, `SUPPRESSED(guard)` — is recorded in `rule_status[]` and mapped to the dependency values of §4.3 for consumers. Lineage closure: a consumer's supporting-fact set is the union of its dependencies' supporting sets.
+Loader builds the DAG from `depends_on`, rejects cycles, evaluates topologically (rule id tiebreak). Each `(rule, binding)` terminal status — `EMITTED(class)`, `HYPOTHESIS`, `UNRESOLVED(reasons)`, `CLOSED(reason)`, `SUPPRESSED(guard)` — is recorded in `rule_status[]` as `{rule_id, version, binding_id, binding: {var: value…}, status, reason}` where `binding_id = sha256(rule_id, version, canonical binding values)`, and mapped to the dependency values of §4.3 for consumers. Lineage closure: a consumer's supporting-fact set is the union of its dependencies' supporting sets.
 
 ## 6. The Assessment object
 
@@ -341,11 +353,11 @@ execution_header
   normalization_version    address/name normaliser version
   admissibility_policy_version
   required_releases[]      {source_family, release_id, snapshot_at, artifact_checksum, projection_admissible}   # pinned at admission
-  officer_windows[]        {ch_person_id, W_p.start, W_p.end, acquisition_complete}
+  officer_acquisitions[]   {ch_person_id, W_p.start, W_p.end, matching_policy_version, acquisition_status}
 subject                    canonical_id, golden_id, entity_type, identifiers[], identity_state, admissibility_state, admissibility_basis
 input_bundle               §6.4
 derived[]                  DERIVED_FACT entries with derivation id and input fact keys
-rule_status[]              {rule_id, version, status, reason}            # §5.5
+rule_status[]              {rule_id, version, binding_id, binding{}, status, reason}   # §5.5, one row per evaluated binding
 assertions[]               assertion_key, class, predicate, subject_refs[], rule_id, rule_version,
                            preconditions[{id, value, satisfied_by: fact_key|null, indicator_text}],
                            guards[{id, value, observed_value, evidence_ref}],
@@ -401,6 +413,10 @@ intel_assessments
   supersedes_assessment_id NULL
   UNIQUE (client_id, execution_id)
 
+intel_request_map
+  client_id, request_key, assessment_id FK, created_at
+  PK (client_id, request_key)            -- immutable; INSERT only
+
 intel_assertions
   assessment_id FK, assertion_ordinal, assertion_key, class, predicate, rule_id, rule_version,
   precondition_or_guard_id NULL, temporal_scope_jsonb, admissibility_state,
@@ -412,7 +428,7 @@ intel_assertions
 
 ### 9.2 Grants and governance
 
-Runtime role: `SELECT` all; `INSERT` on `intel_assessments`, `intel_assertions`; no `UPDATE`/`DELETE`. Rule rows written only by the governed activation route: `governed_verification_service` (`create_verification_request` → two typed-role `submit_review`s under `INTEL_RULE_AUTHOR` / `INTEL_RULE_REVIEWER`), then a stage-advancement-style gate adapted to `intel_rules.status`. "Dual-approved" = two recorded typed-role approvals, not two cryptographic signatures. [FD-IS8.]
+Runtime role: `SELECT` all; `INSERT` on `intel_assessments`, `intel_assertions`, `intel_request_map`; no `UPDATE`/`DELETE`. Rule rows written only by the governed activation route: `governed_verification_service` (`create_verification_request` → two typed-role `submit_review`s under `INTEL_RULE_AUTHOR` / `INTEL_RULE_REVIEWER`), then a stage-advancement-style gate adapted to `intel_rules.status`. "Dual-approved" = two recorded typed-role approvals, not two cryptographic signatures. [FD-IS8.]
 
 ### 9.3 Migration
 
@@ -426,13 +442,19 @@ Trusted-service surface. Scope **`INTEL_READ`** added to the closed catalogue; `
 
 Request: `{question_type, subject: {golden_id | canonical_id | company_number}, as_of?, caller_scan_id?, external_ref?}`.
 
-Admission, in order: (1) resolve subject and compute the execution header **including `required_releases[]` pinned to the latest admitted, projection-admissible release of each required source at this moment** and `officer_windows[]` from IS-P2; (2) look up `(client_id, execution_id)` — if present, return the stored assessment **without** applying any release gate (retrieval never depends on later releases); (3) otherwise apply the gate: `as_of` (default request time truncated to the minute; the response returns it and retries must resend it) must satisfy `max(required_releases.snapshot_at) ≤ as_of ≤ now` → else 422 (C14). A future `as_of` is never accepted as evidence that observations extend into the future.
+Admission, in order:
+1. **Retry lookup first.** `request_key` = the client-supplied `Idempotency-Key` header, else `sha256(canonical request body)`. If `intel_request_map (client_id, request_key)` exists, return that `assessment_id`'s stored assessment unchanged, with **no** release gate, no repinning and no re-evaluation (retrieval never depends on later releases, rules or facts). `GET /v1/intel/assess/{assessment_id}` is always available as the explicit original-assessment path.
+2. Otherwise resolve the subject; pin `required_releases[]` to the latest admitted, **sealed** projection of each required source at this moment; obtain IS-P2 officer acquisitions; apply the gate: `as_of` (default request time truncated to the minute; returned in the response) must satisfy `max(required_releases.snapshot_at) ≤ as_of ≤ now` → else 422 (C14). A future `as_of` is never accepted as evidence that observations extend into the future.
+3. Load facts and decisions; build the bundle; compute `input_bundle_sha256` and then `execution_id`; evaluate; canonicalise; sign.
+4. In one transaction: insert the complete `intel_assessments` row (on `UNIQUE (client_id, execution_id)` conflict → use the existing authorised row), insert `intel_request_map`, call **`AuditChain.append_in_tx(conn, event)`** (the owning-connection wrapper cannot provide this atomicity), commit.
 
-Behaviour: resolve subject (fail-closed); load one-hop facts and decisions; build bundle and header; compute `execution_id`; evaluate; canonicalise; sign; **then** in one transaction: insert the complete row (on `UNIQUE (client_id, execution_id)` conflict → return the existing authorised row), `AuditChain.append` under the chain lock (§11.3), commit. No row is ever reserved and completed later. Returns the Assessment in `StandardEnvelope`; every inadmissible fact, closed rule and suppressed guard appears in `data_warnings` with `client_action`.
+A new evaluation against current inputs is always a new assessment. Tests: retry after a new release is admitted; after a rule-set activation; after a fact changes — each returns the original.
+
+No row is ever reserved and completed later. Returns the Assessment in `StandardEnvelope`; every inadmissible fact, closed rule and suppressed guard appears in `data_warnings` with `client_action`.
 
 ### 10.2 `GET /v1/intel/assess/{assessment_id}` — stored body, byte-identical; same access boundary.
 
-### 10.3 `GET /v1/intel/assess/{assessment_id}/explain/{assertion_key}` — rule definition at the cited version; precondition/guard tables; supporting facts from the stored bundle with lineage via `provenance_explorer_service.get_raw_chain`; `provenance: UNBATCHED` shown where IS-P3(b) applies.
+### 10.3 `GET /v1/intel/assess/{assessment_id}/explain/{assertion_key}` — rule definition at the cited version; precondition/guard tables; supporting facts from the stored bundle with lineage via `provenance_explorer_service.get_raw_chain`.
 
 ### 10.4 `GET /v1/intel/assess/{assessment_id}/verify` — scoped. Recomputes `canonical_sha256`, verifies signature under the recorded key, checks the `audit_chain` event at `audit_chain_seq` carries this digest. Cryptographic validity reported separately from factual correctness.
 
@@ -465,11 +487,12 @@ The engine normally reads the `ACTIVE` rule set. For acceptance, a pinned **cand
 
 ### 13.1 Correctness
 - **A1 Replay.** 100 stored assessments regenerate a byte-identical conclusion body with DB and clock stubbed to fail.
+- **A1b Retry.** The same request replayed after a new release admission, a rule-set activation and a fact change returns the original assessment via `intel_request_map`.
 - **A2 Constitution.** C1–C15 tests pass; C7 grep gate present.
 - **A3 Canonicaliser.** Tamper, collision, header-coverage tests pass.
-- **A4 Explain and provenance.** Every `INFERENCE`/`HYPOTHESIS` in a 500-assessment sample resolves to a complete explain payload. Under IS-P3(a), every support leads to a signed batch; under IS-P3(b), every support is either batch-bound or labelled `UNBATCHED`, and the count of `UNBATCHED` supports is reported.
+- **A4 Explain and provenance.** Every `INFERENCE`/`HYPOTHESIS` in a 500-assessment sample resolves to a complete explain payload, and every supporting fact leads to a signed batch whose Merkle root binds the retained source content (IS-P3).
 - **A5 IS-P0 fixtures** (§5.0) pass, including missing/malformed link and UPDATE path.
-- **A5b IS-P2 fixtures**: duplicate page → `UNKNOWN(ACQUISITION_INCOMPLETE)`; `total_results` changing between pages → `UNKNOWN`; failed page → `UNKNOWN`; distinct-item shortfall → `UNKNOWN`; any tenure with missing start → `UNKNOWN(TENURE_UNKNOWN)`; projection with `parsed + exceptions ≠ artifact_row_count` → inadmissible; a Silver row whose address differs from projection `R` for the same company is **not** read by rule 002 (C15 test).
+- **A5b IS-P2 fixtures**: duplicate page → `UNKNOWN(ACQUISITION_INCOMPLETE)`; `total_results` changing between pages → `UNKNOWN`; failed page → `UNKNOWN`; distinct-item shortfall → `UNKNOWN`; equal matching key with different item digests → `UNKNOWN(IDENTITY_AMBIGUOUS)`; missing `name_elements` or `appointed_on` in the key → `UNKNOWN(TUPLE_INCOMPLETE)`; equal key and digest repeated → counted once; item content changing between pages → `UNKNOWN(DRIFT)`; any tenure with missing start → `UNKNOWN(TENURE_UNKNOWN)`; unsealed projection → inadmissible; exceptions at or unattributable to an address raise `upper` and can turn `PASS` into `UNKNOWN`; write to a sealed projection rejected; a Silver row whose address differs from projection `R` for the same company is **not** read by rule 002 (C15 test).
 
 ### 13.2 Analytic quality — the number that decides
 Frozen benchmark: selection script, seed, labels, identity evidence, degree evidence and input bundles committed; candidate rule set digest recorded.
@@ -488,30 +511,30 @@ Frozen benchmark: selection script, seed, labels, identity evidence, degree evid
 - **A14 Signing readiness receipt**: DB-active `assessment_snapshot` key, one assessment signed and verified via §10.4, event present in `audit_chain`; recorded in the acceptance manifest.
 - **A15 Chain concurrency** test passes with both legacy and synthesis writers.
 
-If A6 or A7 fail: thresholds re-ruled, rule versions bump, benchmark re-runs. After two re-rulings still failing, the rule family is retired and redesigned.
+If A6 or A7 fail: thresholds re-ruled under governed rule versions, benchmark re-runs. After two re-rulings still failing, the outcome goes to the founder for an explicit disposition — **retain blocked**, **authorise redesign**, or **retire** — recorded in the decision record. Nothing retires automatically; a failed benchmark does not alter parameters or withdraw an approved capability on its own.
 
-## 14. Decisions required before IS-1
+## 14. Proposed founder decision record
 
-Technical resolution of a decision in this document is a **recommendation**; none is a ruling until the founder records it.
+Each row is a **proposed ruling** drafted for the founder's adoption. None is adopted by this document; nothing below authorises implementation, activation, key provisioning or deployment until the founder records it. Status of every row: *proposed — awaiting founder signature*.
 
-| ID | Decision | Recommendation |
+| ID | Proposed ruling | Implementation contract |
 |---|---|---|
-| FD-IS1 | Confirm Q-ASSOC-1 with IS-P0, IS-P2, IS-P3 as prerequisites. | Yes. The critical path is person identity **plus** degree evidence **plus** observation timing. |
-| FD-IS2 | Evaluator. | Sibling; semantics from `applicability_sufficiency.py`. *Awaiting ruling.* |
-| FD-IS3 | Guard thresholds (20 / 50 / 30 d); `UNKNOWN` suppresses. | Accept for v1. |
-| FD-IS4 | Identity floor with explicit allow/deny method tables. | Accept; `alias_canonical_rev` denied. |
-| FD-IS5 | Per-client rows; `UNIQUE (client_id, execution_id)`. | Accept. |
-| FD-IS6 | Verify endpoint scoped. | Scoped. *Awaiting ruling.* |
-| FD-IS7 | Route prefix `/v1/intel/assess/*`. | Accept, re-check at wiring. |
-| FD-IS8 | "Dual-approved" = two typed-role approvals. | Accept; new roles. |
-| FD-IS9 | Coverage deferred; no negatives. | Accept as sequencing. *Awaiting ruling.* |
-| FD-IS10 | Rule 002 as within-release co-location. | Accept; name says `_IN`. |
-| FD-IS11 | Refuse rather than emit unsigned; purpose-aware key wrapper. | Accept. |
-| FD-IS12 | Wildcard `'*'` admin bundles excluded from synthesis. | Exclude. |
-| FD-IS13 | Chain-wide advisory lock via one shared helper (both entry points) vs single writer. | Shared helper; a failing concurrency test is a defect to fix, not a trigger to change architecture. |
-| FD-IS14 | Observation contract: within-release equality; reject historical `as_of`. | Accept. |
-| FD-IS15 | IS-P3 (a) batch-bind source-response content vs (b) declare `UNBATCHED` as a weaker guarantee. | (a). (b) is a distinct, weaker evidence contract and requires its own ruling. |
-| FD-IS16 | Appointment identity policy for distinct-item coverage in IS-P2. | `(company_number, appointed_on, officer_role, name_elements digest)`; revisit if CH exposes a stable appointment id in the retained payload. |
+| FD-IS1 | **Approve Q-ASSOC-1 and all three ingest prerequisites.** | IS-P0 (source-qualified officer key), IS-P2 (degree evidence + sealed release projection), IS-P3 (content-bound signed acquisition) are mandatory before IS-1. IS-0 may proceed once decisions are recorded. Associations remain context only. |
+| FD-IS2 | **Approve a sibling evaluator.** | Adopt the applicability evaluator's typed evaluation patterns with the synthesis-specific values and dependency statuses defined here. Do not generalise AOT's ownership arithmetic or change the legal applicability evaluator. Reuse signing, audit, identity and governance infrastructure only through explicit adapters. |
+| FD-IS3 | **Approve 20 companies / 50 active companies per address / 30 days as initial governed benchmark parameters.** | Provisional analytic parameters, not demonstrated accuracy and not a nominee/agent classifier. Unknown or failed guards suppress. Any change is a new governed rule version with revalidation; a failed benchmark neither alters parameters nor retires an approved capability on its own. |
+| FD-IS4 | **Approve the strict identity floor with explicit allow/deny method tables.** | Officers via `ch_person_id` only. Company resolver methods mapped explicitly; registration numbers carry their jurisdiction/source context; name-based evidence needs both the confidence floor and `CONFIRMED_REGISTRY_IDENTITY`. Deny `alias_canonical_rev`; **unknown methods fail closed**. Method, policy version and decision frozen in the bundle. |
+| FD-IS5 | **Approve per-client rows, `UNIQUE (client_id, execution_id)`, and request-key retry mapping.** | Execution identity = header + bundle digest; caller references never mutate signed results. A retry locates its original execution through `intel_request_map` or by `assessment_id` **before** any repinning; resending `as_of` alone is not sufficient. A new evaluation against current inputs is a new assessment. |
+| FD-IS6 | **Approve scoped verification only.** | Same audience, scope and ownership checks as retrieval; verify stored digest, signature and matching audit event; report cryptographic integrity separately from factual correctness. Public receipt verification remains a separate, untaken decision. |
+| FD-IS7 | **Approve `/v1/intel/assess` and child routes.** | Re-check collisions at the implementation revision; keep catalogue/envelope conventions. SDK methods inherit the trusted-service boundary and do not authorise external exposure. |
+| FD-IS8 | **Approve two distinct, role-authorised human approvals through existing governance machinery.** | Typed roles `INTEL_RULE_AUTHOR` / `INTEL_RULE_REVIEWER`, both slots filled, existing proposer/self-review exclusions enforced — the author role names an approval role and never permits the proposer to self-approve. Generic untyped activation requests rejected. Approvals bound to the exact definition digest; active definitions immutable. Two approvals ≠ two cryptographic signatures. |
+| FD-IS9 | **Approve sequencing coverage and negative assertions after this slice.** | No negative predicates now. Coverage and negatives remain tracked work, not cancelled; prior approval status preserved and execution sequencing recorded separately (§0.5). IS-P2 completeness evidence must still prevent guards passing on undercounts. |
+| FD-IS10 | **Approve `REGISTERED_ADDRESS_COLOCATED_IN(A,B,R)` as a release-scoped derived fact.** | Pair equality and bounded address degree read only the sealed projection for the same `R`. Proves registered-address equality in that release — not physical occupancy, operational association or day-current address. Parsing exceptions raise the degree upper bound and never silently lower it. |
+| FD-IS11 | **Approve fail-closed, purpose-aware signing.** | New strict canonicaliser; domain separation with mode; exact DB-active `assessment_snapshot` key selection. No eligible key → 503, never an unsigned assessment. Historical verification material retained. A14 remains the readiness gate; this ruling does not assert a key is deployed. |
+| FD-IS12 | **Exclude wildcard `*` bundles from synthesis routes.** | Explicitly scoped first-party credentials plus object-level ownership; explicit wildcard rejection on this surface only; global wildcard semantics and the Explorer's admin surface unchanged. |
+| FD-IS13 | **Approve the shared chain-wide advisory-lock helper.** | Legacy `append` owns its connection and delegates; `append_in_tx` delegates with the caller's transaction; one lock; all direct writers participate; assessment row and audit event commit atomically; legacy signatures preserved. A failing concurrency test blocks release until fixed; single-writer is a separate architectural decision. |
+| FD-IS14 | **Approve release-bound observations and rejection of unsupported historical/future executions.** | New executions pin their admitted sealed release set; stored retrieval/replay is unaffected. Resignation exclusive, censoring inclusive **at each item's own observed-through bound**; no invented dates; `as_of` cannot extend observed evidence. |
+| FD-IS15 | **Choose (a): signed batches binding source-response content.** | Page responses and officer items bound by content hashes/Merkle evidence; original acquisition metadata preserved when wrapping retained payloads. `UNBATCHED` is not a fallback; if (a) is blocked the dependency is recorded and any weaker guarantee needs its own ruling. |
+| FD-IS16 | **Approve a versioned, acquisition-scoped distinct-item policy; the tuple is a matching key, not identity.** | Prefer a stable appointment id only where present and verified. Retain canonical full-item digests and page/offset evidence; equal-key/different-item → ambiguous → `UNKNOWN`; null key components → `UNKNOWN`; identical digests deduplicated; every raw item retained. Never deduplicate distinct appointments merely because the key agrees. |
 
 ## 15. Phasing
 
@@ -527,7 +550,7 @@ Technical resolution of a decision in this document is a **recommendation**; non
 | IS-4 | Explorer tab, lane, stage, explain view, correlations. | A4. |
 | IS-5 | Isolated benchmark environment; A6a census; A6–A10; A14; exported acceptance bundle; founder ruling keep / re-rule / retire. | Ruling recorded. |
 
-No phase begins before FD-IS1–IS16 are ruled. IS-0 may begin before IS-P0/P2/P3 complete; IS-1 may not.
+No phase begins before the founder has recorded FD-IS1–IS16. IS-0 may begin before IS-P0/P2/P3 complete; IS-1 may not.
 
 ## 16. Glossary
 
@@ -539,7 +562,10 @@ No phase begins before FD-IS1–IS16 are ruled. IS-0 may begin before IS-P0/P2/P
 | Analytic replay | Re-evaluation of retained rules over the stored bundle with no live lookup; not reproduction of acquisition or resolution. |
 | `TRUE / FALSE / UNKNOWN(reason) / INADMISSIBLE_ONLY / INVALID` | Precondition values per binding; only `UNKNOWN` (`NO_CANDIDATE` or `FIELD_MISSING`) can spawn a hypothesis. |
 | `EMITTED / HYPOTHESIS / UNRESOLVED / CLOSED / SUPPRESSED` | Terminal statuses of a `(rule, binding)` evaluation. |
-| `W_p` | Per-officer observation window from IS-P2 acquisition; `observed_current_through = W_p.end`. |
+| `W_p` | Per-officer acquisition window (metadata only). Each item is censored at its own page timestamp `observed_through`, never at `W_p.end`. |
+| Matching key | Acquisition-scoped tuple used to detect duplicates in IS-P2; not a proven appointment identity. |
+| Sealed projection | Release projection with `sealed_at` and `content_digest`; INSERT/UPDATE/DELETE rejected thereafter. |
+| `intel_request_map` | Immutable client-scoped mapping from request key to assessment id; consulted before any repinning. |
 | `RESIGNED` / `CENSORED` | Tenure end kinds: exclusive source endpoint vs inclusive observation boundary. |
 | Release projection | `ukch_company_release_projection`: immutable, once-parsed, checksum-verified view of one bulk release; the only source for rule 002 and address degree. |
 | `TRUE / UNKNOWN / CLOSED / SUPPRESSED` | Dependency values seen by consumer rules. |
@@ -548,8 +574,8 @@ No phase begins before FD-IS1–IS16 are ruled. IS-0 may begin before IS-P0/P2/P
 | Degree evidence | Distinct-item-complete paginated appointments (officer) or admissible release projection (address) (IS-P2). |
 | Release `R`, `t_R` | A named admitted company release and its snapshot boundary; the only context in which addresses are compared. |
 | `BENCHMARK` mode | Evaluation of a pinned candidate rule set in a disposable isolated database with its own audit table; exported before disposal; bound into the signed header and signature domain. |
-| C1–C15 · FD-IS1–16 · A1–A15 (+A6a) | Prohibitions · founder decisions · acceptance criteria. |
+| C1–C15 · FD-IS1–16 · A1–A15 (+A1b, A5b, A6a) | Prohibitions · proposed founder rulings · acceptance criteria. |
 
 ---
 
-*v0.4.0 generated 2026-10-12. DRAFT — not authorised for implementation.*
+*v0.5.0 generated 2026-10-12. DRAFT — proposed decision record attached; not authorised for implementation until the founder records FD-IS1–16.*
