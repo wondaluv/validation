@@ -1,72 +1,75 @@
-# Message to dev team — Synthesis programme accommodations for IOI
+# Message to dev team — Synthesis programme accommodations for IOI (v2)
 
 **From:** Omaida Ali
-**Re:** NYA-INTEL-SYNTH-001 (Deterministic Intelligence Synthesis) — accommodations required so that NYA-IOI-001 v1.2 can consume it
-**Date:** 13 October 2026
+**Re:** NYA-INTEL-SYNTH-001 (Deterministic Intelligence Synthesis) — accommodations required so that NYA-IOI-001 v1.3 can consume it
+**Date:** 13 October 2026 · supersedes v1 of this message
 
 ---
 
 Team,
 
-IOI v1.2 is now specified as a downstream consumer of Synthesis: IOI requests the signed Assessment for a subject **before** it touches any of its own sources, treats established facts as its strongest evidence, aims its acquisition at synthesis indicators, and is constrained by what synthesis has closed or found conflicted. Synthesis never consumes anything from IOI except ingest candidates routed through governed source admission.
+IOI v1.3 is specified as a downstream consumer of Synthesis. IOI obtains the current signed Assessment for a subject **before** it touches any of its own sources; treats established association facts as analytical references (not sources, not corroboration); aims its acquisition at synthesis indicators; and reads closed evaluations as "the rule did not establish X under this binding" — never as disproof. Synthesis never consumes anything from IOI except ingest candidates routed through governed source admission. RRI is a Veredis programme downstream of both and needs nothing from you.
 
-To make that work, the Synthesis programme needs the following accommodations. They are **additive contract and access changes only**. There are **no vocabulary changes** on the synthesis side — IOI has absorbed the vocabulary separation entirely (it relabels consumed assertions as `SYNTH_*`, renames its own `ASSOCIATION_ONLY` to `ASSOCIATION_SIGNAL`, and runs a CI check so no IOI signal type can collide with a synthesis predicate). Please do not rename, re-class or re-word anything in SYNTH-001 on IOI's account.
+The items below are **additive contract and access changes only**. There are **no vocabulary changes** on the synthesis side; IOI absorbs the separation through typed output templates and a proposition-mapping contract. Please do not rename, re-class or re-word anything in SYNTH-001 on IOI's account.
 
-Please treat each item as a proposed amendment to v0.5.0 (or an early item in its backlog), to be folded into the next revision rather than applied informally.
+Treat each as a proposed amendment to v0.5.0, to be folded into the next revision. Items 1–7 should be in the slice's API contract before IS-3 cuts routes; 8–10 are documentation.
 
-## 1. Audience: an internal-service consumer
+## 1. Internal-service audience, with public-key distribution
 
-v0.5.0 §10 requires `INTEL_READ` **and** `require_client_type_in("FIRST_PARTY_APPLICATION")` **and** wildcard rejection, with object-level ownership keyed on `client_id`. IOI is an internal Nyansapo bounded context, not a first-party application.
+v0.5.0 §10 admits `FIRST_PARTY_APPLICATION` only. IOI is an internal Nyansapo bounded context.
 
-**Needed:** a second permitted audience — `INTERNAL_SERVICE` (or equivalent in `api/models/admin.py`) — with its own non-wildcard credential, the same `INTEL_READ` scope requirement, and the same object-level ownership rule. IOI's assessments are IOI's; a first-party client's are theirs. No shared `client_id`. This should be its own row in the §14 decision record (an FD-IS17), not a silent widening of FD-IS12.
+**Needed:** an `INTERNAL_SERVICE` audience (own non-wildcard credential, same `INTEL_READ` scope, same object-level ownership; new FD-IS17, not a widening of FD-IS12). **And** publication of the `assessment_snapshot` public key(s) with their active/retired status so an internal consumer can verify signature, `SERVE` mode in the signature domain, and `canonical_sha256` before trusting an Assessment. IOI never holds the signing key.
 
-## 2. Structured indicators, not only free text
+## 2. Structured indicators
 
-v0.5.0 §5.1 gives each precondition an `indicator_text`, and §7 emits one `INDICATOR` per `UNKNOWN` precondition. IOI uses indicators to **target acquisition**, so it needs machine-readable content alongside the text.
+On every `INDICATOR` assertion, alongside `indicator_text`: `rule_id`, `rule_version`, `binding_id`, `precondition_id`, `unknown_reason` (`NO_CANDIDATE | FIELD_MISSING`), `source_families[]`. All already exist in the rule definition and `rule_status[]`; surface them on the assertion and let canonicalisation sign them.
 
-**Needed:** on every `INDICATOR` assertion, in addition to `indicator_text`: `precondition_id`, `source_families[]` (the families that could satisfy it), `unknown_reason` (`NO_CANDIDATE | FIELD_MISSING`), and the rule's `expression` summary. This is already in the rule definition; it only needs to be surfaced on the assertion. Canonicalisation covers it (so it is signed), which is what we want.
+## 3. Addressable closed evaluations
 
-## 3. Stable, exposed per-binding statuses
+IOI must reference a `CLOSED` evaluation as `(assessment_id, rule_id, rule_version, binding_id, reason)` without inventing an assertion. **Needed:** confirm `rule_status[]` is returned in full by `GET /v1/intel/assess/{id}`, that `binding{}` carries canonical identifiers (`ch_person_id`, company numbers, release id, tenure end kinds, `observed_through`) rather than internal row keys, and that `binding_id` is stable across executions for the same bound values (it is, per §5.5 — confirm nothing on this path changes it).
 
-IOI's constraints key on `CLOSED(FALSE)` and `CONFLICT` **per binding**. v0.5.0 §5.5/§6.2 already records `rule_status[] {rule_id, version, binding_id, binding{}, status, reason}` in the signed body.
+## 4. Predicate manifest
 
-**Needed:** confirm this is returned in full in `GET /v1/intel/assess/{id}` and that `binding{}` carries the canonical identifiers (`ch_person_id`, company numbers, release id, tenure end kinds) rather than internal row keys, so IOI can match a proposition on the same binding without re-resolving. Also confirm `assertion_key` is stable across assessments for correlation (it is per §9.1 — just confirm nothing on the IOI path changes that).
+**Needed:** a machine-readable manifest of the active rule set's predicates (`rule_set_sha256` → list of predicate names with their semantic class: association / cited / conflict) at a read-only route. IOI's CI uses it to forbid signal-type name collisions, and IOI's proposition-mapping table is versioned against it. Adding a predicate on your side should fail IOI's CI until a mapping version exists — that is the intended coupling.
 
-## 4. Caller context without a scan
+## 5. Two operations: retrieve existing vs obtain current (replaces v1 item 5)
 
-v0.5.0 §10.1 request carries `caller_scan_id?` and `external_ref?`, both Veredis-flavoured.
+v0.5.0 U1 deliberately returns the **original** assessment for a repeated request key. That is correct for retries and it means re-POSTing is not a freshness check. IOI needs:
 
-**Needed:** a neutral `caller_context` object (`{consumer: "IOI", consumer_ref: "<ioi evaluation id>"}`) in the request and echoed in the envelope (non-canonical, like `external_ref`), so IOI's `ioi_synthesis_consumption` rows can be joined back without pretending to be a scan.
+- **Retrieve existing** — `GET /v1/intel/assess/{assessment_id}`; already specified.
+- **Obtain current** — `GET /v1/intel/assess/current?subject=…&question=Q-ASSOC-1`: returns the latest eligible `SERVE` assessment for the subject/question **at the currently pinned sealed releases**, or `404 NO_CURRENT` if none exists at those releases. Read-only; no evaluation; same access boundary.
+- **New execution** — an explicit path (a request parameter or a distinct route; your call) that creates a fresh evaluation against current admitted inputs with a **new** request key, so it is retry-safe without colliding with the original mapping.
+- **Supersession definition** in the contract: `B` supersedes `A` iff same subject and question, `B.as_of > A.as_of`, and (`B.input_bundle_sha256 ≠ A.input_bundle_sha256` or `B.rule_set_sha256 ≠ A.rule_set_sha256`). Identical digests = refresh, not supersession. Until SYNTH-004 (drift) exists, IOI applies exactly this and nothing finer.
 
-## 5. A cheap supersession check
+IOI will not create signed assessments merely to discover whether anything changed.
 
-IOI pins `assessment_id`/`execution_id` and must re-evaluate when a newer Assessment exists for the subject. SYNTH-004 (drift) is deferred; IOI cannot wait for it, and re-running `POST /v1/intel/assess` just to find out is wasteful and creates assessments IOI doesn't need.
+## 6. Caller context without a scan
 
-**Needed:** `GET /v1/intel/assess/{assessment_id}/status` returning `{superseded: bool, latest_execution_id_for_subject, latest_as_of}` — read-only, same access boundary, no evaluation. When SYNTH-004 lands this becomes a projection of it; until then it is a single query on `intel_assessments` by `subject_key` ordered by `as_of`.
+A neutral `caller_context {consumer: "IOI", consumer_ref}` in the request, echoed non-canonically in the envelope, in place of `caller_scan_id` for non-scan consumers.
 
-## 6. Explain payload reachable by the consumer
+## 7. Explain reachable by the consumer
 
-IOI's admin trace links each `SYNTH_*` evidence item to the synthesis explain payload (§10.3 in v0.5.0). Please confirm the explain endpoint is callable under the `INTERNAL_SERVICE` audience with object-level ownership satisfied by the consumer that created the assessment — i.e. IOI can explain its own assessments, not anyone else's.
+Confirm `GET …/explain/{assertion_key}` is callable under `INTERNAL_SERVICE` with object-level ownership satisfied by the consumer that created the assessment. IOI uses it to inspect the admissible facts behind a closed evaluation when its mapping class is `POTENTIALLY_CONTRADICTORY`.
 
-## 7. Ingest-candidate intake (not a synthesis change, but adjacent)
+## 8. Authority statement per question family (documentation)
 
-IOI will file `POSSIBLE_SYNTHESIS_EVIDENCE` candidates naming a structured source family synthesis does not yet load (court registers, insolvency reports). This goes to **governed source admission**, not to the synthesis engine, and never into facts. Nothing is required of SYNTH-001 itself beyond acknowledging in §12 (or a new §12.4) that IOI is a permitted consumer and that the only reverse channel is source admission. Please add that one paragraph so the boundary is written on both sides.
+One paragraph in SYNTH-001 §1 or §3: the first slice's authority is limited to its four association predicates; it cites AOT and sanctions outcomes; it emits no negative assertions; a `CLOSED` status means the rule did not establish its target under the recorded binding and is not a finding about the real-world relationship. IOI v1.3 states the same from its side; both documents should carry it.
 
-## 8. Decision-effect composition note
+## 9. Permitted-consumer paragraph (documentation)
 
-One sentence in SYNTH-001 §3 or §12: "Assessments composed with other `CONTEXT_ONLY` outputs (IOI, RRI) in a consumer do not raise the decision-effect cap and must not be combined into a score." IOI v1.2 says the same from its side and Veredis's parity test asserts it. Having it in both documents closes the gap.
+In §12 or a new §12.4: IOI is a permitted consumer under `INTEL_READ`; the only reverse channel is governed source admission (ingest candidates); RRI consumes Assessments through Veredis, not directly from the synthesis service.
 
-## What is explicitly **not** being asked
+## 10. Decision-effect composition (documentation)
 
-- No renaming of `INFERENCE`, `EMITTED`, `ASSOCIATION_CLUSTER_SUPPORTED`, or any class, status or predicate.
-- No new rule family, question type, or source family for IOI's benefit.
+One sentence: Assessments composed with other `CONTEXT_ONLY` outputs in a consumer do not raise the decision-effect cap and must not be combined into a score.
+
+## What is explicitly not being asked
+
+- No renaming of any class, status or predicate; no new rule family or question type for IOI's benefit.
 - No relaxation of C2, C6, C7 or any constitutional prohibition.
-- No acceptance of IOI output, review events, or confidence bands as synthesis inputs.
-- No change to the benchmark, acceptance gate or founder decisions already proposed, except the one new FD-IS17 audience row.
-
-## Sequencing
-
-IOI phase 2 (synthesis adapter) cannot start until the SYNTH-001 first slice is accepted. Items 1–6 above should be in the slice's contract **before** IS-3 (routes/SDK) is cut, so they ride the same contract-completeness check rather than becoming a v1.1 of the API. Items 7–8 are documentation and can go in whenever v0.6 is drafted.
+- No acceptance of IOI output, review events or confidence bands as synthesis inputs.
+- No negative assertions — IOI does not need them and must not be given them by proxy.
+- No change to the benchmark, acceptance gate or the proposed founder decisions except the new FD-IS17 audience row.
 
 If anything here conflicts with a ruling already recorded on FD-IS1–16, the ruling wins and I'd like to hear about it rather than have it quietly worked around.
 
